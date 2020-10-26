@@ -1,4 +1,8 @@
+import numpy as np
 import scipy.io as sio
+from sklearn.metrics import confusion_matrix, \
+    accuracy_score, classification_report, cohen_kappa_score
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -8,6 +12,8 @@ from model import HybridSN
 
 # 地物类别
 num_classes = 16
+batch_size = 128
+
 X = sio.loadmat('data/Indian_pines_corrected.mat')['indian_pines_corrected']
 y = sio.loadmat('data/Indian_pines_gt.mat')['indian_pines_gt']
 
@@ -86,13 +92,13 @@ class TestDS(torch.utils.data.Dataset):
 trainset = TrainDS()
 testset = TestDS()
 train_loader = torch.utils.data.DataLoader(dataset=trainset,
-                                           batch_size=64,
+                                           batch_size=batch_size,
                                            shuffle=True,
-                                           num_workers=2)
+                                           num_workers=4)
 test_loader = torch.utils.data.DataLoader(dataset=testset,
-                                          batch_size=64,
+                                          batch_size=batch_size,
                                           shuffle=False,
-                                          num_workers=2)
+                                          num_workers=4)
 
 # 使用GPU训练，可以在菜单 "代码执行工具" -> "更改运行时类型" 里进行设置
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -120,3 +126,19 @@ for epoch in range(100):
           (epoch + 1, total_loss / (epoch + 1), loss.item()))
 
 print('Finished Training')
+
+count = 0
+# 模型测试
+for inputs, _ in test_loader:
+    inputs = inputs.to(device)
+    outputs = net(inputs)
+    outputs = np.argmax(outputs.detach().cpu().numpy(), axis=1)
+    if count == 0:
+        y_pred_test = outputs
+        count = 1
+    else:
+        y_pred_test = np.concatenate((y_pred_test, outputs))
+
+# 生成分类报告
+classification = classification_report(ytest, y_pred_test, digits=4)
+print(classification)
